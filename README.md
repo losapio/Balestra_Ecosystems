@@ -1,6 +1,7 @@
 # Balestra_Ecosystems
 Original data and R script to reproduce the results and figure of the paper by Balestra et al. (2026) "Long-term ecological impacts of Norway spruce plantations on biodiversity and microhabitat conditions" published in Ecosystems
 
+If you use these data or R script, please cite the paper as following.
 
 Journal: Ecosystems
 
@@ -21,4 +22,4 @@ Corresponding author: Gianalberto Losapio; Department of Biosciences, University
 
 DOI manuscript:
 
-DOI data:
+DOI data: 10.5281/zenodo.18297702
