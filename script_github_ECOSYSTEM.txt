@@ -1,0 +1,270 @@
+###Rscript to analyse Ecological Incator Values and soil parameters
+
+library(FD)
+library(ggplot2)
+library(ggpubr)
+library(lme4)
+library(lmerTest)
+library(car)
+
+##EIVs: 
+#create the objects
+
+tabAmb1 <- read.csv2("df_PlotXSpecie.csv")
+
+tabAmb2 <- read.csv2("df_PlotXLandolt.csv")
+
+#prepare the matrixes
+
+rownames(tabAmb2) = tabAmb2$X
+tabAmb2$X=NULL
+
+rownames(tabAmb1) = tabAmb1$X
+tabAmb1$X=NULL
+
+#clean species with 0 occurrences or NA
+
+table(colSums(tabAmb1)==0)
+tabAmb2 = tabAmb2[which(colSums(tabAmb1)>0),]
+
+tabAmb1 = tabAmb1[,which(colSums(tabAmb1)>0)]
+
+table(colnames(tabAmb1)==rownames(tabAmb2))
+
+#control the match among lists of species
+
+ncol(tabAmb1)
+nrow(tabAmb2)
+
+#run the dbFD function from package FD
+
+FDI <- dbFD(df, matrix, calc.FRic=T, corr="none")
+
+#Save the table in .csv format
+
+library(carData)
+write.table(FDI,
+            "FDI.csv",
+            sep = ";",
+            dec = ",",
+            col.names = NA)
+
+#lm con indicatori Landolt (1-5)
+FDI <- read.csv2("FDI.csv")
+View(FDI)
+
+#Regression with EIVs and functional indexes
+Regr <- lm(FDI$EIV ~ FDI$habitat)
+summary(Regr)
+boxplot(FDI$CWM.Temp.factor~FDI$veg,
+        xlab="habitat",
+        ylab="EIV_name", las=1,
+        col=c("red", "blue", "green"))
+
+##soil data:
+
+df_soil <- read.csv2("Suoli.csv")
+
+#prepare the variable of habitat type (ht)
+
+df$veg <- factor(df$veg, labels = c("AR", "BM", "PR"))
+df$Sito <- as.factor(df$Sito)
+
+#linear mixed model with soil parameter and ht, horizon and ht:horizon as fixed effect. The site is kept as random effect
+ 
+MixRegr <- lmer(soil_par ~ veg*Orizzonte + (1|Sito),                
+                           data=df)
+summary(MixRegr)
+Anova(MixRegr)
+
+#Boxplot of soil parameter within the three habitats
+
+boxplot(df$soil_par ~ df$veg*df$Orizzonte,
+        xlab="habitat",
+        ylab="name of soil_par", las=1,
+        col=c("red", "blue", "green"),
+        cex.lab=1.5)
+
+###Rscript for sPLSDA analysis and Path analysis
+
+library(vegan)
+library(lmerTest)
+library(openxlsx)
+library(PERMANOVA)
+library(ggplot2)
+library(lmtest)
+library(readxl)
+library(dplyr)
+library(lme4)
+library(Matrix)
+library(zoo)
+library(emmeans)
+library(car)
+library(ranger)
+library(performance)
+library(lavaanPlot)
+library(lavaan)
+library(MASS)
+
+#prepare the matrix
+
+matrix <- read.xlsx("occurrence_matrix.xlsx")
+
+matrix_n <- matrix[,-1]
+rownames(matrix_n) = matrix$Record
+
+##Partial least square discriminant analysis
+
+library(mixOmics)
+result.splsda.y <- splsda(matrix_n, habitat_vector,
+                          scale=T, ncomp=2, keepX=c(20,20)) 
+
+#extraction of the coordinates of the axes
+
+habitat$splsda.x1 <- result.splsda.y$variates$X[,1] 
+habitat$splsda.x2 <- result.splsda.y$variates$X[,2]
+
+#test of habitat prediction on x-axis
+
+mod.splsda.x1.y <- lm(splsda.x1 ~ veg, data = habitat_vector) 
+Anova(mod.splsda.x1.y)
+summary(mod.splsda.x1.y) 
+emmeans(mod.splsda.x1.y, pairwise ~ veg, data = habitat_vector) 
+
+#test of habitat prediction on y-axis
+
+mod.splsda.x2.y <- lm(splsda.x2 ~ veg, data = habitat_vector)
+
+Anova(mod.splsda.x2.y)
+summary(mod.splsda.x2.y) 
+emmeans(mod.splsda.x2.y, pairwise ~ veg, data = habitat_vector) 
+
+
+#graphic with dendrograms of plant communities and color intensity
+
+pdf("cim.splsda.pdf")
+cim(result.splsda.y,
+    row.names=habitat_vector)
+dev.off() 
+
+#graphic of clusters of the habitats
+
+pdf("cim.y.pdf", width=8, height=8)
+plotIndiv(result.splsda.y,
+          comp=1:2,
+          group=habitat_vector,
+          ind.names=FALSE,
+          legend=TRUE,
+          ellipse=F,
+          star= F,
+          centroid = F,
+          abline=T,
+          pch=c(0,1,2)) 
+dev.off()
+
+#extraction of the most relevant species
+
+selectVar1 <- selectVar(result.splsda.y1, comp=1) 
+
+selectVar2 <- selectVar(result.splsda.y1, comp=2)
+
+
+plotIndiv(result.splsda.y,
+          
+          comp=1:2,
+          
+          group=df_suoli$veg[1:25],
+          
+          ind.names=FALSE,
+          
+          legend=TRUE,
+          
+          ellipse=F,
+          
+          star= TRUE,
+          
+          centroid = F,
+          
+          abline=T,
+          
+          pch=c(1,2,3))
+
+
+##Path analysis
+
+## stepwise model to select the variables that explains the model better.
+
+mod1_lcc = lm(var1 ~ var2 + var3 + var4 + var5 + ... + varn,
+              data = df1)
+
+step.mod1.lcc = stepAIC(mod1_lcc)
+step.mod1.lcc$anova
+
+mod2_lcc = lm(var1 ~ var2 + var3 + var4 + ... + varn,
+              data = df1)
+Anova(mod2_lcc)
+summary(mod2_lcc)
+model <- lm(var1 ~ var2 + var6 + var4,
+              data = df1)
+vif(model)
+AIC(mod2_lcc)
+
+modpars.lcc = model_parameters(mod2_lcc,
+                               effects = "fixed",
+                               ci_method = "residual")
+
+print(modpars.lcc)
+
+library(effectsize)
+cohens_f(modpars.lcc, partial = TRUE)
+
+## 
+library(rfPermute)
+# Run rfPermute to get p-values for variable importance
+rf.mod.lcc <- rfPermute(var1 ~ var2 + var6 + var4,
+                        data = df1,
+                        na.action = na.omit,
+                        importance =TRUE,
+                        ntree = 5000,
+                        numer.rep = 500,
+                        num.cores = 4)
+
+# see model
+summary(rf.mod.lcc)
+imp.rf.mod.lcc = importance(rf.mod.lcc)
+print(imp.rf.mod.lcc)
+plotImportance(rf.mod.lcc, scale = TRUE, sig.only = F)
+
+#repeat this process for all the functions you want to include in your model. Then you can move to path analysis
+
+#define the model
+
+mytable <- data.frame(var1, var2, var3, var4, ...) 
+str(mytable)
+is.numeric(mytable)
+sapply(mytable, is.numeric)
+
+# Specify path model (example with n variables)
+
+model0<-
+'
+  # regression
+    
+    var1 ~ var2 + var6 + var4
+    
+    var5 ~ var1 + var7 + var4  
+    
+'
+fit0 <- sem(model0, data = mytable) #Estimate model
+summary(fit0, standardized = TRUE) 
+model_performance(fit0) #
+
+labels <- list(var1 = "name var1", var2 = "name var2", var3 = "name var3",...)
+
+pl<-lavaanPlot(model = fit0,labels=labels,
+               node_options = list(shape = "box", fontname = "Helvetica"),
+               edge_options = list(color = "red"), coefs = TRUE) 
+
+embed_plot_pdf(pl, "Path.pdf")
+
+
